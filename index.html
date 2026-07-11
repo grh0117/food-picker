@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>今天吃什么</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+<style>
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 450, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
+  .dice-spin:active span { animation: spin 0.4s ease-out; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes pop { 0% { transform: scale(.98); opacity:.5; } 100% { transform: scale(1); opacity:1; } }
+  .pop-in { animation: pop .22s ease-out; }
+  .hero-img { background: radial-gradient(circle at 20% 20%, rgba(255,255,255,.85), rgba(255,255,255,0) 34%), linear-gradient(135deg,#ffd8c8,#ffefe8 45%,#fff8f6); }
+  .active-meal, .active-radius { background:#ff6b35!important; color:white!important; border-color:#ff6b35!important; box-shadow:0 8px 18px rgba(255,107,53,.22); }
+  .radius-btn:not(.active-radius) { background:#fde3db!important; color:#6e6058!important; border-color:transparent!important; box-shadow:none!important; }
+  .radius-btn { border:1px solid transparent; }
+
+  .decision-perspective { perspective: 1000px; }
+  .decision-card-inner { transition: transform .62s cubic-bezier(.2,.8,.2,1); transform-style: preserve-3d; }
+  .decision-card.flipped .decision-card-inner { transform: rotateY(180deg); }
+  .decision-card-front, .decision-card-back { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .decision-card-back { transform: rotateY(180deg); }
+  .decision-shuffling .decision-card { animation: decision-shuffle .72s ease-in-out 2; }
+  .decision-shuffling .decision-card:nth-child(2) { animation-delay: .06s; }
+  .decision-shuffling .decision-card:nth-child(3) { animation-delay: .12s; }
+  .decision-shuffling .decision-card:nth-child(4) { animation-delay: .18s; }
+  .decision-shuffling .decision-card:nth-child(5) { animation-delay: .24s; }
+  @keyframes decision-shuffle { 0%{transform:translateX(0) rotate(0)} 35%{transform:translateX(18px) rotate(4deg)} 70%{transform:translateX(-14px) rotate(-3deg)} 100%{transform:translateX(0) rotate(0)} }
+  .disabled { opacity:.5; pointer-events:none; }
+</style>
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      colors: {
+        primary: '#ab3500', 'primary-container':'#ff6b35', background:'#fff8f6', surface:'#fff8f6',
+        'surface-container-lowest':'#ffffff', 'surface-container-low':'#fff1ed', 'surface-container':'#ffe9e3',
+        'surface-container-high':'#fde3db', 'outline-variant':'#e1bfb5', outline:'#8d7168', secondary:'#6a5c54',
+        'on-surface':'#261814', 'on-surface-variant':'#594139', 'secondary-container':'#efdcd2', 'on-secondary-container':'#6e6058'
+      },
+      fontFamily: { sans: ['Inter','sans-serif'] },
+      boxShadow: { soft:'0 8px 30px rgba(45,49,66,.08)', card:'0 12px 40px rgba(45,49,66,.12)', glow:'0 10px 20px rgba(255,107,53,.30)' }
+    }}
+  }
+</script>
+</head>
+<body class="bg-background text-on-surface font-sans min-h-screen pb-24 md:pb-0">
+  <main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 md:grid-cols-12 gap-8">
+    <section class="md:col-span-5 flex flex-col gap-8">
+      <div class="space-y-3">
+        <h1 class="text-[42px] leading-[48px] md:text-[52px] md:leading-[58px] font-extrabold tracking-[-0.03em] text-primary">今天吃什么？</h1>
+        <p class="text-lg text-secondary">不许选择困难了！！！</p>
+      </div>
+
+      <div class="bg-white p-8 rounded-3xl shadow-soft space-y-7 border border-outline-variant/30">
+        <div class="space-y-3">
+          <label class="font-bold text-sm text-on-surface-variant">当前位置</label>
+          <div class="flex gap-2">
+            <div class="relative flex-grow">
+              <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">location_on</span>
+              <input id="address" class="w-full pl-12 pr-4 py-4 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary-container text-base" placeholder="请输入位置（例：北京市海淀区清华大学）" type="text" value="" />
+            </div>
+            <button id="geoBtn" class="bg-surface-container-high text-primary p-4 rounded-xl hover:bg-surface-container transition-colors" title="解析地址">
+              <span class="material-symbols-outlined">my_location</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <label class="font-bold text-sm text-on-surface-variant">用餐时段</label>
+          <div class="grid grid-cols-4 gap-2" id="mealGroup">
+            <button data-meal="breakfast" class="meal-btn py-3 rounded-full border border-primary text-primary font-bold hover:bg-surface-container transition-all">早餐</button>
+            <button data-meal="lunch" class="meal-btn py-3 rounded-full border border-primary active-meal font-bold transition-all">午餐</button>
+            <button data-meal="dinner" class="meal-btn py-3 rounded-full border border-outline text-on-surface-variant font-bold hover:bg-surface-container transition-all">晚餐</button>
+            <button data-meal="any" class="meal-btn py-3 rounded-full border border-outline text-on-surface-variant font-bold hover:bg-surface-container transition-all">不限</button>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div class="flex justify-between items-center">
+            <label class="font-bold text-sm text-on-surface-variant">范围距离</label>
+            <span id="radiusLabel" class="text-primary font-bold">2km</span>
+          </div>
+          <div class="grid grid-cols-4 gap-2" id="radiusGroup">
+            <button data-radius="1000" class="radius-btn py-3 rounded-xl bg-surface-container-high text-on-secondary-container text-sm font-bold">1km</button>
+            <button data-radius="2000" class="radius-btn py-3 rounded-xl active-radius text-sm font-bold">2km</button>
+            <button data-radius="3000" class="radius-btn py-3 rounded-xl bg-surface-container-high text-on-secondary-container text-sm font-bold">3km</button>
+            <button data-radius="5000" class="radius-btn py-3 rounded-xl bg-surface-container-high text-on-secondary-container text-sm font-bold">5km</button>
+          </div>
+        </div>
+
+        <button id="searchBtn" class="dice-spin w-full py-5 bg-primary-container text-white rounded-2xl font-bold text-2xl flex items-center justify-center gap-3 shadow-glow hover:brightness-110 active:scale-95 transition-all">
+          <span class="material-symbols-outlined text-3xl">casino</span>
+          抽取 Top 5
+        </button>
+
+        <div id="status" class="text-sm text-secondary leading-6 bg-surface-container-low rounded-2xl p-4">输入地址后点击“抽取 Top 5”。午餐/晚餐会排除咖啡、奶茶、甜品等零食饮料；早餐会尽量按营业时间筛选。</div>
+      </div>
+
+      <div class="space-y-4">
+        <div class="bg-white p-4 rounded-2xl border border-outline-variant/30 shadow-sm space-y-3">
+          <div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary">chat_bubble</span><h2 class="font-bold text-on-surface">AI 口味助理</h2></div>
+          <div id="aiAnswer" class="text-sm text-on-surface-variant bg-surface-container-low p-4 rounded-xl leading-6 min-h-[76px]">筛选前可随便问吃什么；筛选后我会基于 Top 5 候选，从里面帮你推荐并说明理由。</div>
+          <div class="flex gap-2">
+            <input id="aiInput" type="text" placeholder="例如：想吃点辣的、不要甜品、适合晚餐..." class="w-full px-3 py-3 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary-container text-sm" />
+            <button id="aiBtn" class="bg-primary-container text-white px-4 rounded-xl hover:brightness-110 transition-all"><span class="material-symbols-outlined">send</span></button>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-outline-variant/30 shadow-sm space-y-3" id="decisionBox">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary">style</span>
+              <h2 class="font-bold text-on-surface">纠结救星</h2>
+            </div>
+            <button id="addDecisionOption" class="text-primary hover:bg-primary/10 rounded-full p-1 transition-colors" title="添加选项，最多 5 个">
+              <span class="material-symbols-outlined">add_circle</span>
+            </button>
+          </div>
+          <p class="text-xs text-secondary leading-5">已有 2–5 个想吃的选项时，用它听天由命。</p>
+          <div class="space-y-2" id="decisionOptions">
+            <div class="flex gap-2 items-center">
+              <input class="decision-option flex-grow px-3 py-2 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary-container text-sm" placeholder="选项 1，例如：黄焖鸡米饭" data-dynamic-placeholder="1" type="text" />
+              <button class="remove-decision-option text-outline hover:text-red-600 transition-colors invisible" title="删除"><span class="material-symbols-outlined">remove_circle</span></button>
+            </div>
+            <div class="flex gap-2 items-center">
+              <input class="decision-option flex-grow px-3 py-2 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary-container text-sm" placeholder="选项 2，例如：螺蛳粉" data-dynamic-placeholder="1" type="text" />
+              <button class="remove-decision-option text-outline hover:text-red-600 transition-colors invisible" title="删除"><span class="material-symbols-outlined">remove_circle</span></button>
+            </div>
+          </div>
+          <div id="decisionHint" class="text-xs text-secondary">请输入 2–5 个选项。</div>
+          <button id="startDecisionDraw" class="w-full bg-primary-container text-white py-3 rounded-xl font-bold hover:brightness-110 active:scale-[.98] transition-all flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined">casino</span> 开始抽取
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="md:col-span-7 flex flex-col gap-8">
+      <div id="featuredCard" class="group relative overflow-hidden bg-white rounded-3xl shadow-card border-2 border-primary-container/20 pop-in">
+        <div class="aspect-[16/9] w-full relative hero-img overflow-hidden">
+          <img id="heroImage" class="w-full h-full object-cover opacity-90" alt="食物氛围图" src="https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=1400&auto=format&fit=crop" />
+          <div class="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"></div>
+          <div id="poolBadge" class="absolute top-4 left-4 bg-primary text-white px-4 py-2 rounded-full font-bold flex items-center gap-1 shadow-lg">
+            <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1;">star</span>
+            Top 50 名单
+          </div>
+          <div class="absolute top-4 right-4 bg-white/90 backdrop-blur px-4 py-2 rounded-full font-bold text-primary shadow-lg">#1 今日推荐</div>
+        </div>
+        <div class="p-8 space-y-5">
+          <div class="flex justify-between items-start gap-4">
+            <div class="min-w-0">
+              <h2 id="featuredName" class="text-3xl md:text-4xl font-bold text-on-surface truncate">还没开抽</h2>
+              <div id="featuredTags" class="flex gap-2 mt-3 flex-wrap">
+                <span class="bg-surface-container-high text-on-secondary-container px-3 py-1 rounded-full text-xs font-medium">等待输入地址</span>
+              </div>
+            </div>
+            <button id="reshuffleBtn" class="bg-primary/10 text-primary p-4 rounded-full hover:bg-primary hover:text-white transition-all disabled" title="换一组">
+              <span class="material-symbols-outlined">refresh</span>
+            </button>
+          </div>
+          <p id="featuredAddress" class="text-secondary text-base flex items-start gap-2">
+            <span class="material-symbols-outlined text-primary-container">location_on</span>
+            填入地址后点击“抽取 Top 5”。
+          </p>
+          <div class="flex gap-4 pt-2">
+            <a id="mapLink" href="#" target="_blank" rel="noreferrer" class="disabled flex-grow flex items-center justify-center gap-2 bg-primary-container text-white py-4 rounded-xl font-bold shadow-md hover:shadow-lg transition-all">
+              <span class="material-symbols-outlined">map</span>高德地图查看
+            </a>
+            <button id="detailBtn" class="px-6 border border-outline-variant text-on-surface-variant py-4 rounded-xl font-bold hover:bg-surface-container transition-all">查看详情</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="resultGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-outline-variant/30 sm:col-span-2">
+          <h3 class="text-xl font-bold text-primary">等待搜索</h3>
+          <p class="mt-2 text-secondary">搜索结果会显示在这里。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+
+  <div id="decisionModal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/40 backdrop-blur-md px-4">
+    <div class="bg-white w-full max-w-3xl p-6 md:p-8 rounded-3xl shadow-2xl relative border border-outline-variant/30">
+      <button id="closeDecisionModal" class="absolute top-4 right-4 text-outline hover:text-primary transition-colors" title="关闭">
+        <span class="material-symbols-outlined text-3xl">close</span>
+      </button>
+      <div class="text-center mb-7">
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-low text-primary font-bold text-sm mb-3">
+          <span class="material-symbols-outlined text-base">style</span> 纠结救星
+        </div>
+        <h2 id="decisionModalTitle" class="text-3xl md:text-4xl font-extrabold tracking-[-0.02em] text-primary">听天由命</h2>
+        <p id="decisionModalSubtitle" class="text-secondary mt-2">卡片已打乱，点击一张翻开。</p>
+      </div>
+      <div id="decisionCardsGrid" class="flex flex-wrap justify-center gap-5 py-3"></div>
+      <div id="decisionResult" class="hidden mt-6 text-center bg-surface-container-low rounded-2xl p-5">
+        <div class="text-sm text-secondary">今天就吃</div>
+        <div id="decisionResultText" class="text-3xl font-extrabold text-primary mt-1"></div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 pb-6 shadow-[0_-4px_20px_rgba(45,49,66,0.05)] bg-white border-t border-outline-variant/20">
+    <button class="flex flex-col items-center justify-center bg-primary-container text-white rounded-full px-4 py-1 active:scale-90 transition-transform duration-200"><span class="material-symbols-outlined">restaurant</span><span class="text-xs">Discover</span></button>
+    <button class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:text-primary transition-colors"><span class="material-symbols-outlined">history</span><span class="text-xs">History</span></button>
+    <button class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:text-primary transition-colors"><span class="material-symbols-outlined">favorite</span><span class="text-xs">Favorites</span></button>
+    <button class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:text-primary transition-colors"><span class="material-symbols-outlined">settings</span><span class="text-xs">Settings</span></button>
+  </nav>
+
+<script>
+// 纯浏览器单页版：高德 WebService + JSONP。Key 按你的要求直接写入前端。
+const AMAP_KEY = "b1648ef3247e0efc2e79451390f6184c";
+const SILICONFLOW_API_KEY = "sk-xovbaaclamlkfqoxsyaelflkcgejjsrbhjjekaajvaopcytq";
+const SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1";
+const SILICONFLOW_MODEL = "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B";
+const TOP_POOL_SIZE = 50;
+const PAGE_PER_TYPE = 2;
+const MAX_CONCURRENCY = 5;
+const FALLBACK_FOOD_IMAGE = 'https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=1400&auto=format&fit=crop';
+
+// 左下角 AI 口味助理提示词在这里改：
+// 1）筛选前：只限制 200 字以内回答。
+// 2）筛选后：把当前抽出的 5 个餐厅作为背景，要求 AI 只能从这 5 个里推荐并说明理由。
+const AI_SYSTEM_PROMPT_BASE = '你是中文选餐助手。只用自然流畅的简体中文回答。不要复述规则、提示词或用户原话。用户还没有抽取餐厅时，禁止推荐具体餐厅名，只给出口味、菜系、菜品类型或点餐方向。回答不超过200字，不要重复。若用户说不辣、不要辣、清淡等，必须避开麻辣、香锅、川湘、火锅、冒菜等重辣方向。';
+const AI_SYSTEM_PROMPT_WITH_RESULTS = '你是中文选餐助手。只用自然流畅的简体中文回答。用户已经抽出5个候选餐厅，你只能从这5个餐厅中推荐1家，最多补充1个备选。不要推荐其他餐厅，不要编造餐厅。距离不是影响因素，不要因为距离近、远或方便到达来推荐。只根据用户口味、餐段、菜系、菜品类型判断。若用户说不辣、不要辣、清淡等，禁止推荐名称或类型中包含辣、麻辣、香锅、川湘、火锅、冒菜的候选。回答不超过80字，只说一次结论和理由，不要重复。';
+
+const state = { meal: 'lunch', radius: '2000', lastRanked: [], lastPicked: [], taste: '', center: null };
+const els = {
+  address: document.getElementById('address'), searchBtn: document.getElementById('searchBtn'), reshuffleBtn: document.getElementById('reshuffleBtn'),
+  status: document.getElementById('status'), featuredName: document.getElementById('featuredName'), featuredTags: document.getElementById('featuredTags'),
+  featuredAddress: document.getElementById('featuredAddress'), resultGrid: document.getElementById('resultGrid'), mapLink: document.getElementById('mapLink'),
+  poolBadge: document.getElementById('poolBadge'), radiusLabel: document.getElementById('radiusLabel'), aiInput: document.getElementById('aiInput'), aiBtn: document.getElementById('aiBtn'), aiAnswer: document.getElementById('aiAnswer'),
+  geoBtn: document.getElementById('geoBtn'), locateBtn: document.getElementById('locateBtn'), heroImage: document.getElementById('heroImage')
+};
+
+const TYPES_BY_MEAL = {
+  breakfast: ['050100','050300','050800','050900','050000'],
+  lunch: ['050100','050300','050400','050700','050000'],
+  dinner: ['050100','050300','050400','050700','050000'],
+  any: ['050100','050300','050400','050500','050700','050800','050900','050000']
+};
+
+const BASE_MEAL_KEYWORDS = {
+  breakfast: ['早餐','包子','粥','豆浆','油条','烧饼','馄饨','饭团','三明治','肠粉','煎饼','豆腐脑','小笼包','面包','咖啡'],
+  lunch: ['外卖','快餐','便当','盖饭','盒饭','简餐','工作餐','套餐','轻食','健康餐','沙拉','炒菜','家常菜','小炒','川菜','湘菜','东北菜','粤菜','江西小炒','木桶饭','炒饭','炒面','麻辣烫','麻辣香锅','冒菜','酸菜鱼','烤鱼','水煮鱼','米线','米粉','螺蛳粉','面馆','拉面','拌面','热干面','重庆小面','刀削面','黄焖鸡','鸡公煲','煲仔饭','烧腊','卤味','卤肉饭','沙县','兰州拉面','饺子','馄饨'],
+  dinner: ['外卖','炒菜','家常菜','小炒','川菜','湘菜','东北菜','粤菜','江西小炒','麻辣香锅','冒菜','麻辣烫','串串','烧烤','火锅','酸菜鱼','烤鱼','水煮鱼','鸡公煲','煲仔饭','烧腊','卤味','米线','米粉','螺蛳粉','面馆','拉面','拌面','日料','韩餐','盖饭','便当','盒饭','轻食'],
+  any: ['外卖','快餐','便当','盖饭','盒饭','简餐','炒菜','家常菜','小炒','麻辣烫','麻辣香锅','冒菜','酸菜鱼','烤鱼','米线','米粉','面馆','拉面','黄焖鸡','鸡公煲','煲仔饭','烧腊','卤味','饺子','馄饨','粥','包子','小吃','轻食','沙拉','咖啡','奶茶','甜品']
+};
+
+const DELIVERY_KEYWORDS = ['外卖','快餐','便当','盖饭','盒饭','简餐','工作餐','套餐','轻食','沙拉','健康餐','低卡','减脂餐','鸡胸肉','炒菜','家常菜','小炒','川菜','湘菜','东北菜','粤菜','江西小炒','木桶饭','炒饭','炒面','麻辣烫','麻辣香锅','冒菜','串串','酸菜鱼','烤鱼','水煮鱼','米线','米粉','螺蛳粉','面馆','拉面','拌面','热干面','重庆小面','刀削面','黄焖鸡','沙县','兰州','鸡公煲','煲仔饭','烧腊','卤味','卤肉饭','包子','饺子','馄饨','粥','粉','面','小吃','炸鸡','汉堡','披萨','意面'];
+const BREAKFAST_KEYWORDS = BASE_MEAL_KEYWORDS.breakfast;
+const MEAL_MAIN_NEGATIVE = ['咖啡','奶茶','茶饮','果茶','柠檬茶','甜品','甜点','蛋糕','面包','烘焙','糕点','糕饼','水果捞','冰粉','冰淇淋','饮品','饮料','酸奶','烧仙草','鲜果','果汁','茶室','咖啡厅','甜品店','饮品店','冷饮店','奶茶店'];
+const GLOBAL_NEGATIVE = ['食堂','餐厅部','宴会','宴会厅','婚宴','酒楼','酒店','宾馆','会所','俱乐部','茶楼','农家乐','单位','机关','学校','幼儿园','医院','大厦餐厅','员工餐厅','职工餐厅','内部','培训中心','会议中心','接待中心','酒吧','KTV','夜总会'];
+const CHAIN_KEYWORDS = ['麦当劳','肯德基','必胜客','汉堡王','瑞幸','星巴克','库迪','Tims','喜茶','奈雪','蜜雪冰城','古茗','霸王茶姬','沪上阿姨','茶百道','一点点','CoCo','华莱士','德克士','杨国福','张亮','吉野家','和府捞面','袁记云饺','沙县','兰州','老乡鸡','乡村基','真功夫','永和大王','南城香','小杨生煎','鱼你在一起','太二','喜家德','魏家凉皮','霸蛮','遇见小面','张拉拉','米村拌饭'];
+
+function setStatus(text){ els.status.textContent = text; }
+function setBusy(busy){ els.searchBtn.disabled = busy; els.geoBtn.disabled = busy; els.reshuffleBtn.classList.toggle('disabled', busy || state.lastRanked.length < 5); els.searchBtn.classList.toggle('opacity-75', busy); }
+function textOf(poi){ return `${poi.name||''} ${poi.type||''} ${poi.address||''}`; }
+function hasAny(text, list){ return list.some(k => text.includes(k)); }
+function escapeHtml(str){ return String(str ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
+function cleanType(type=''){ return String(type).split(';').filter(Boolean).slice(-2).join('/').replace('餐饮服务/','') || '餐饮'; }
+
+function jsonp(url, params={}, timeout=14000){
+  return new Promise((resolve, reject)=>{
+    const cb = `amap_cb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const qs = new URLSearchParams({...params, output:'JSON', callback:cb}).toString();
+    const script = document.createElement('script');
+    const timer = setTimeout(()=>{ cleanup(); reject(new Error('请求超时，请检查网络或高德 Key 是否可用')); }, timeout);
+    function cleanup(){ clearTimeout(timer); delete window[cb]; script.remove(); }
+    window[cb] = data => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); reject(new Error('高德接口加载失败，请检查 Key、域名白名单或网络')); };
+    script.src = `${url}?${qs}`;
+    document.body.appendChild(script);
+  });
+}
+
+async function geocode(address){
+  const data = await jsonp('https://restapi.amap.com/v3/geocode/geo', { key:AMAP_KEY, address });
+  if(data.status !== '1' || !data.geocodes?.length) throw new Error(data.info || '地址解析失败，请输入更完整的地址');
+  const geo = data.geocodes[0];
+  return { location:geo.location, formattedAddress:geo.formatted_address || address, city:geo.city || '' };
+}
+async function placeAround({location, radius, types='050000', keywords='', page=1}){
+  const data = await jsonp('https://restapi.amap.com/v3/place/around', { key:AMAP_KEY, location, radius, types, keywords, offset:'25', page:String(page), extensions:'all', sortrule:'distance' });
+  if(data.status !== '1'){ console.warn('AMap place error', data.info, {types,keywords,page}); return []; }
+  return data.pois || [];
+}
+async function fetchCandidates(center){
+  const tasks = [];
+  const types = TYPES_BY_MEAL[state.meal] || TYPES_BY_MEAL.any;
+  const keywords = Array.from(new Set([...(BASE_MEAL_KEYWORDS[state.meal] || []), state.taste].filter(Boolean)));
+  for(const t of types){ for(let p=1; p<=PAGE_PER_TYPE; p++) tasks.push(() => placeAround({ location:center.location, radius:state.radius, types:t, page:p })); }
+  for(const kw of keywords) tasks.push(() => placeAround({ location:center.location, radius:state.radius, types:'050000', keywords:kw, page:1 }));
+  const all=[]; let cursor=0;
+  async function worker(){ while(cursor < tasks.length){ const i = cursor++; setStatus(`正在处理...`); try{ all.push(...await tasks[i]()); }catch(e){ console.warn(e); } } }
+  await Promise.all(Array.from({length:MAX_CONCURRENCY}, worker));
+  return dedupeByPoiId(all);
+}
+function dedupeByPoiId(pois){
+  const map = new Map();
+  for(const poi of pois){ const id = poi.id || `${poi.name}_${poi.location}`; if(!map.has(id)) map.set(id, poi); }
+  return [...map.values()];
+}
+function normalizeRestaurantName(name=''){
+  let clean = String(name).trim();
+  const chain = CHAIN_KEYWORDS.find(k => clean.includes(k));
+  if(chain) return chain;
+  clean = clean.replace(/[（(][^）)]{1,40}[）)]/g,'').split(/[｜|丨·•—–-]/)[0].trim();
+  clean = clean.replace(/(旗舰店|直营店|加盟店|分店|总店)$/g,'').trim();
+  clean = clean.replace(/(.{2,})([\u4e00-\u9fa5A-Za-z0-9]{1,12})店$/g, (m,prefix,branch)=>{
+    const hints = ['路','街','道','号','广场','中心','大厦','商场','城','园','桥','站','大学','医院','社区','公园','村','口','门','区'];
+    return hints.some(h => branch.includes(h)) ? prefix : m;
+  }).trim();
+  return clean || String(name).trim();
+}
+function dedupeByRestaurantName(pois){
+  const map = new Map();
+  for(const poi of pois){
+    const displayName = normalizeRestaurantName(poi.name || '未命名餐厅');
+    const key = displayName.toLowerCase();
+    const next = {...poi, originalName: poi.name || displayName, displayName};
+    const old = map.get(key);
+    if(!old || Number(next.deliveryScore||0) > Number(old.deliveryScore||0) || (Number(next.deliveryScore||0) === Number(old.deliveryScore||0) && Number(next.distance||999999) < Number(old.distance||999999))) map.set(key,next);
+  }
+  return [...map.values()];
+}
+
+function getOpenTimeText(poi){
+  const b = poi.biz_ext || {};
+  const candidates = [b.open_time, b.opentime, b.open_time2, b.opentime2, b.business_time, poi.open_time, poi.opentime, poi.business_time].filter(Boolean);
+  return candidates.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(' ');
+}
+function parseMinutes(hm){ const [h,m] = hm.split(':').map(Number); return h*60 + (m||0); }
+function textShowsClosed(openText=''){
+  return /暂停营业|休息|歇业|已关闭|未营业/.test(openText);
+}
+function openAtMinute(openText, targetMinute){
+  if(!openText) return null; // null = 未知，不能证明关闭
+  if(textShowsClosed(openText)) return false;
+  if(/24小时|全天|00:00-24:00/.test(openText)) return true;
+  const matches = [...openText.matchAll(/(\d{1,2}:\d{2})\s*[-~至—–]\s*(\d{1,2}:\d{2})/g)];
+  if(!matches.length) return null;
+  return matches.some(m => {
+    const start = parseMinutes(m[1]); const end = parseMinutes(m[2]);
+    if(start === end) return true;
+    if(end < start) return targetMinute >= start || targetMinute <= end;
+    return targetMinute >= start && targetMinute <= end;
+  });
+}
+function isBreakfastOpen(poi){
+  const text = getOpenTimeText(poi);
+  const openAt8 = openAtMinute(text, 8*60);
+  if(openAt8 === false) return false;
+  // 如果现在就在早餐窗口，额外尽量确保现在也开门。
+  const now = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+  if(nowMin >= 5*60 && nowMin <= 10*60+30){
+    const openNow = openAtMinute(text, nowMin);
+    if(openNow === false) return false;
+  }
+  return true;
+}
+function isMealMainFood(poi){
+  const text = textOf(poi);
+  const type = poi.type || '';
+  if(hasAny(text, MEAL_MAIN_NEGATIVE)) return false;
+  if(type.includes('咖啡') || type.includes('甜品') || type.includes('糕饼') || type.includes('冷饮') || type.includes('茶艺')) return false;
+  return true;
+}
+function scorePoi(poi){
+  const text = textOf(poi);
+  const type = poi.type || '';
+  let score = 0;
+  const reasons=[];
+  if(hasAny(text, GLOBAL_NEGATIVE)) return {score:-999,reasons:['排除场所']};
+  if((state.meal === 'lunch' || state.meal === 'dinner') && !isMealMainFood(poi)) return {score:-999,reasons:['排除饮品甜点']};
+  if(state.meal === 'breakfast'){
+    if(!hasAny(text, BREAKFAST_KEYWORDS) && !type.includes('快餐') && !type.includes('小吃') && !type.includes('糕饼') && !type.includes('咖啡')) return {score:-30,reasons:['非早餐倾向']};
+    if(!isBreakfastOpen(poi)) return {score:-999,reasons:['早餐时段未营业']};
+    score += 18; reasons.push('早餐可选');
+  }
+  for(const k of DELIVERY_KEYWORDS){ if(text.includes(k)) score += 8; }
+  if(hasAny(text, DELIVERY_KEYWORDS)) reasons.push('外卖倾向');
+  for(const k of CHAIN_KEYWORDS){ if(text.includes(k)) score += 16; }
+  if(hasAny(text, CHAIN_KEYWORDS)) reasons.push('连锁门店');
+  if(type.includes('快餐')) { score += 28; reasons.push('快餐'); }
+  if(type.includes('小吃')) { score += 20; reasons.push('小吃'); }
+  if(type.includes('中餐厅')) { score += 12; reasons.push('正餐'); }
+  if(type.includes('外国餐厅')) { score += 8; reasons.push('正餐'); }
+  if(hasAny(text, ['炒菜','家常菜','小炒','川菜','湘菜','东北菜','粤菜','江西小炒','木桶饭'])) { score += 18; reasons.push('正餐外卖'); }
+  if(hasAny(text, ['麻辣烫','麻辣香锅','冒菜','酸菜鱼','烤鱼','水煮鱼','黄焖鸡','鸡公煲','煲仔饭','烧腊','卤味'])) { score += 18; reasons.push('热门正餐'); }
+  if(state.taste && text.includes(state.taste)) { score += 25; reasons.push('口味命中'); }
+  const dist = Number(poi.distance || 99999);
+  if(dist <= 800) score += 12; else if(dist <= 1500) score += 8; else if(dist <= 3000) score += 4;
+  return {score: Math.round(score), reasons:[...new Set(reasons)].slice(0,3)};
+}
+function rankPois(pois){
+  const ranked = pois.map(p => { const s=scorePoi(p); return {...p, deliveryScore:s.score, reasons:s.reasons}; })
+    .filter(p => p.deliveryScore > 0)
+    .sort((a,b) => b.deliveryScore - a.deliveryScore);
+  return dedupeByRestaurantName(ranked).sort((a,b) => b.deliveryScore - a.deliveryScore);
+}
+function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function pickTop5(){ const pool = state.lastRanked.slice(0, Math.min(TOP_POOL_SIZE, state.lastRanked.length)); return shuffle(pool).slice(0,5); }
+function amapUrl(poi){ const name=encodeURIComponent(poi?.displayName || poi?.name || '餐厅'); return `https://uri.amap.com/marker?position=${poi.location}&name=${name}&src=food-picker&coordinate=gaode&callnative=1`; }
+function getPoiImage(poi){
+  const photos = Array.isArray(poi?.photos) ? poi.photos : [];
+  const photo = photos.find(x => x && typeof x.url === 'string' && x.url.trim());
+  return photo ? photo.url.trim() : '';
+}
+function updateHeroImage(poi){
+  const url = getPoiImage(poi);
+  els.heroImage.onerror = () => { els.heroImage.onerror = null; els.heroImage.src = FALLBACK_FOOD_IMAGE; };
+  els.heroImage.src = url || FALLBACK_FOOD_IMAGE;
+  els.heroImage.alt = url ? `${poi.displayName || poi.name || '推荐餐厅'} 的高德图片` : '食物氛围图';
+}
+
+function renderResults(list){
+  state.lastPicked = list;
+  const poolN = Math.min(TOP_POOL_SIZE, state.lastRanked.length);
+  els.poolBadge.innerHTML = `<span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1;">star</span> Top ${poolN || TOP_POOL_SIZE} 名单`;
+  if(!list.length){
+    updateHeroImage(null);
+    els.featuredName.textContent = '正在处理...';
+    els.featuredTags.innerHTML = '<span class="bg-surface-container-high text-on-secondary-container px-3 py-1 rounded-full text-xs font-medium">请稍等</span>';
+    els.featuredAddress.innerHTML = '<span class="material-symbols-outlined text-primary-container animate-pulse">hourglass_top</span> 正在处理...';
+    els.mapLink.classList.add('disabled');
+    els.resultGrid.innerHTML = '<div class="bg-white p-5 rounded-2xl shadow-sm border border-outline-variant/30 sm:col-span-2"><h3 class="text-xl font-bold text-primary">正在处理...</h3><p class="mt-2 text-secondary">正在为你筛选更合适的候选。</p></div>';
+    els.reshuffleBtn.classList.add('disabled');
+    return;
+  }
+  const first = list[0];
+  updateHeroImage(first);
+  els.featuredName.textContent = first.displayName || first.name || '推荐餐厅';
+  els.featuredTags.innerHTML = `<span class="bg-surface-container-high text-on-secondary-container px-3 py-1 rounded-full text-xs font-medium">${escapeHtml(cleanType(first.type))}</span><span class="bg-surface-container-high text-on-secondary-container px-3 py-1 rounded-full text-xs font-medium">${first.distance || '?'}m</span><span class="bg-surface-container-high text-on-secondary-container px-3 py-1 rounded-full text-xs font-medium">等概率抽取</span>`;
+  els.featuredAddress.innerHTML = `<span class="material-symbols-outlined text-primary-container">location_on</span>${escapeHtml(first.address || '暂无地址')}`;
+  els.mapLink.href = amapUrl(first); els.mapLink.classList.remove('disabled');
+  els.reshuffleBtn.classList.toggle('disabled', state.lastRanked.length < 5);
+  els.resultGrid.innerHTML = list.slice(1).map((poi, idx)=> cardHtml(poi, idx+2)).join('');
+  document.getElementById('featuredCard').classList.remove('pop-in');
+  void document.getElementById('featuredCard').offsetWidth;
+  document.getElementById('featuredCard').classList.add('pop-in');
+}
+function cardHtml(poi, num){
+  return `<div class="bg-white p-5 rounded-2xl shadow-sm border border-outline-variant/30 hover:shadow-md transition-shadow pop-in">
+    <div class="flex justify-between mb-3"><span class="text-primary font-bold text-2xl">${String(num).padStart(2,'0')}</span><span class="bg-secondary-container text-on-secondary-container px-2 py-1 rounded text-[10px] font-bold uppercase">候选结果</span></div>
+    <h3 class="text-xl font-semibold text-on-surface truncate">${escapeHtml(poi.displayName || poi.name || '未命名餐厅')}</h3>
+    <div class="flex justify-between items-center mt-2 text-xs text-secondary"><span>${escapeHtml(cleanType(poi.type))}</span><span class="flex items-center gap-1"><span class="material-symbols-outlined text-xs">near_me</span>${poi.distance || '?'}m</span></div>
+    <p class="mt-3 text-sm text-outline truncate">${escapeHtml(poi.address || '暂无地址')}</p>
+    <a class="mt-4 inline-flex text-sm font-bold text-primary hover:underline" href="${amapUrl(poi)}" target="_blank" rel="noreferrer">高德地图查看 →</a>
+  </div>`;
+}
+async function runSearch(){
+  const addr = els.address.value.trim();
+  if(!addr){ setStatus('请先输入地址。'); return; }
+  setBusy(true); state.lastRanked=[]; renderResults([]);
+  try{
+    setStatus(`正在处理...`);
+    const center = await geocode(addr); state.center = center;
+    setStatus(`正在处理...`);
+    const pois = await fetchCandidates(center);
+    setStatus(`正在处理...`);
+    state.lastRanked = rankPois(pois);
+    const picked = pickTop5(); renderResults(picked);
+    setStatus(`已完成：从 Top ${Math.min(TOP_POOL_SIZE,state.lastRanked.length)} 中等概率抽出 5 个。`);
+  }catch(e){ console.error(e); setStatus(e.message || '请求失败。'); renderResults([]); els.featuredName.textContent='出错了'; els.featuredAddress.innerHTML=`<span class="material-symbols-outlined text-primary-container">location_on</span>${escapeHtml(e.message || '请稍后重试')}`; }
+  finally{ setBusy(false); }
+}
+
+
+function currentPickedSummary(){
+  if(!state.lastPicked?.length) return '';
+  return state.lastPicked.map((p,i)=>{
+    const name = p.displayName || p.name || '未命名餐厅';
+    const type = cleanType(p.type);
+    const address = p.address || '暂无地址';
+    return `${i+1}. ${name}｜类型：${type}｜地址：${address}`;
+  }).join('\n');
+}
+function buildAIPrompt(userText){
+  const mealName = ({breakfast:'早餐', lunch:'午餐', dinner:'晚餐', any:'不限'})[state.meal] || state.meal;
+  const hasResults = state.lastPicked && state.lastPicked.length > 0;
+  if(!hasResults){
+    return {
+      system: AI_SYSTEM_PROMPT_BASE,
+      user: `用户偏好：${userText}
+请给出适合的口味、菜系、菜品类型或点餐方向，不要推荐具体餐厅名。`
+    };
+  }
+  return {
+    system: AI_SYSTEM_PROMPT_WITH_RESULTS,
+    user: `用餐时段：${mealName}\n候选餐厅：\n${currentPickedSummary()}\n用户偏好：${userText}\n任务：从候选餐厅中推荐1家，最多补充1个备选；必须使用候选原名。距离不是影响因素，不能用距离作为理由。若用户说不辣/不要辣/清淡，避开名称或类型含辣、麻辣、香锅、川湘、火锅、冒菜的候选。`
+  };
+}
+function fallbackAIAnswer(userText){
+  const t = userText || '';
+  if(t.includes('辣')) return '想吃辣的，可以优先选川菜、湘菜、麻辣香锅、冒菜、麻辣烫、酸菜鱼或小炒类。口味重一点就选麻辣香锅/川湘菜，想省事快捷就选盖饭、面馆或麻辣烫。';
+  if(t.includes('清淡') || t.includes('健康') || t.includes('轻')) return '想清淡一点，可以优先选轻食沙拉、粥粉面、蒸菜、粤菜、家常小炒或健康餐。尽量避开烧烤、炸鸡、麻辣香锅和重油重辣的品类。';
+  if(t.includes('快') || t.includes('赶')) return '想快一点，建议选快餐、盖饭、便当、面馆、米粉米线或黄焖鸡这类出餐稳定的品类。品类简单、出餐稳定的店通常更适合工作日快速解决。';
+  return '可以先按今天的心情选方向：想热乎选面、粥、砂锅；想重口选川湘菜、麻辣香锅；想轻一点选轻食、沙拉、粤菜；想省事选盖饭、便当或快餐。';
+}
+function looksBrokenAIText(text){
+  if(!text) return true;
+  const cleaned = text.replace(/https?:\/\/\S+/g,'');
+  const lower = cleaned.toLowerCase();
+  const latin = (cleaned.match(/[A-Za-z]{3,}/g) || []).join('').length;
+  const cjk = (cleaned.match(/[\u4e00-\u9fff]/g) || []).length;
+  const badFragments = ['kukudaijie','kukulu','tô','Ã','�','系统提示','提示词','用户问题','必须使用','请不要输出','user','system prompt'];
+  return badFragments.some(x => lower.includes(x.toLowerCase())) || (latin > 8 && latin > cjk * 0.35);
+}
+function trimRepeatedSentences(content){
+  const parts = String(content || '').split(/(?<=[。！？!?])/).map(s=>s.trim()).filter(Boolean);
+  const seen = new Set();
+  const kept = [];
+  for(const part of parts){
+    const key = part.replace(/[，。！？、\s]/g,'').slice(0,42);
+    if(key && !seen.has(key)){ seen.add(key); kept.push(part); }
+    if(kept.join('').length >= 120) break;
+  }
+  return kept.join('') || String(content || '').trim();
+}
+function sanitizeAIAnswer(text, userText){
+  let content = String(text || '').trim();
+  if(looksBrokenAIText(content)) return fallbackAIAnswer(userText);
+  const wantsNoSpicy = /(不辣|不要辣|别辣|清淡|不能吃辣|少辣)/.test(userText || '');
+  const spicyLeak = /(麻辣|香锅|火锅|冒菜|川菜|湘菜|辣)/.test(content);
+  if(wantsNoSpicy && spicyLeak && state.lastPicked?.length){
+    const safe = state.lastPicked.find(p => !/(麻辣|香锅|火锅|冒菜|川菜|湘菜|辣)/.test(`${p.displayName || p.name || ''} ${p.type || ''}`));
+    if(safe) return `${safe.displayName || safe.name} 更适合不辣口味，类型更温和，不会把重辣作为主要卖点。`;
+  }
+  content = trimRepeatedSentences(content);
+  if(content.length > 180) content = content.slice(0, 180).replace(/[，、；：][^，、；：]*$/, '') + '。';
+  return content;
+}
+
+async function askFoodAI(){
+  const userText = els.aiInput.value.trim();
+  if(!userText){ els.aiAnswer.textContent = '先告诉我你想吃什么口味、预算、忌口或心情。'; return; }
+  els.aiBtn.disabled = true;
+  const old = els.aiBtn.innerHTML;
+  els.aiBtn.innerHTML = '<span class="material-symbols-outlined animate-spin">refresh</span>';
+  els.aiAnswer.textContent = 'AI 正在思考中...';
+  const aiPrompt = buildAIPrompt(userText);
+  try{
+    const res = await fetch(`${SILICONFLOW_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SILICONFLOW_API_KEY}` },
+      body: JSON.stringify({
+        model: SILICONFLOW_MODEL,
+        temperature: 0.25,
+        top_p: 0.7,
+        max_tokens: 120,
+        presence_penalty: 0.6,
+        frequency_penalty: 0.8,
+        messages: [
+          { role: 'system', content: aiPrompt.system },
+          { role: 'user', content: aiPrompt.user }
+        ]
+      })
+    });
+    if(!res.ok){ throw new Error(`硅基流动请求失败：${res.status}`); }
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content?.trim();
+    els.aiAnswer.textContent = sanitizeAIAnswer(content, userText) || 'AI 没有返回内容，请稍后再试。';
+  }catch(e){
+    console.error(e);
+    els.aiAnswer.textContent = 'AI 调用失败。若是浏览器跨域限制，可改成后端代理；当前餐厅搜索不受影响。';
+  }finally{
+    els.aiBtn.disabled = false;
+    els.aiBtn.innerHTML = old;
+  }
+}
+
+document.querySelectorAll('.meal-btn').forEach(btn => btn.addEventListener('click', ()=>{
+  state.meal = btn.dataset.meal;
+  document.querySelectorAll('.meal-btn').forEach(b=>b.classList.remove('active-meal'));
+  btn.classList.add('active-meal');
+  const copy = {breakfast:'早餐：优先早餐品类，并按营业时间过滤', lunch:'午餐：只保留正餐外卖，排除咖啡奶茶甜品', dinner:'晚餐：只保留正餐外卖，排除零食饮料', any:'不限：保留更宽泛的外卖候选'};
+  setStatus(copy[state.meal]);
+}));
+document.querySelectorAll('.radius-btn').forEach(btn => btn.addEventListener('click', ()=>{
+  state.radius = btn.dataset.radius;
+  document.querySelectorAll('.radius-btn').forEach(b=>b.classList.remove('active-radius'));
+  btn.classList.add('active-radius');
+  els.radiusLabel.textContent = `${Number(state.radius)/1000}km`;
+}));
+els.searchBtn.addEventListener('click', runSearch);
+els.geoBtn.addEventListener('click', runSearch);
+if (els.reshuffleBtn) els.reshuffleBtn.addEventListener('click', ()=>{ if(!state.lastRanked.length) return; renderResults(pickTop5()); setStatus(`已从 Top ${Math.min(TOP_POOL_SIZE,state.lastRanked.length)} 候选池中等概率重新抽取。`); });
+els.address.addEventListener('keydown', e => { if(e.key === 'Enter') runSearch(); });
+els.aiBtn.addEventListener('click', askFoodAI);
+els.aiInput.addEventListener('keydown', e => { if(e.key === 'Enter') askFoodAI(); });
+if (els.locateBtn) els.locateBtn.addEventListener('click', ()=> setStatus('当前版本使用地址输入更稳定；浏览器定位可后续接入。'));
+
+
+// 纠结救星：2-5 个自定义选项，打乱后抽卡翻开。独立辅助功能，不影响主抽取逻辑。
+const decisionOptions = document.getElementById('decisionOptions');
+const addDecisionOption = document.getElementById('addDecisionOption');
+const startDecisionDraw = document.getElementById('startDecisionDraw');
+const decisionModal = document.getElementById('decisionModal');
+const closeDecisionModal = document.getElementById('closeDecisionModal');
+const decisionCardsGrid = document.getElementById('decisionCardsGrid');
+const decisionResult = document.getElementById('decisionResult');
+const decisionResultText = document.getElementById('decisionResultText');
+const decisionHint = document.getElementById('decisionHint');
+const decisionModalSubtitle = document.getElementById('decisionModalSubtitle');
+
+const decisionExampleFoods = [
+  '螺蛳粉','黄焖鸡米饭','麻辣香锅','轻食沙拉','炒菜盖饭','兰州拉面','冒菜','酸菜鱼','烤肉拌饭','沙县小吃','煲仔饭','重庆小面','饺子','砂锅粥','韩式拌饭','炸鸡汉堡','米线','小炒肉盖饭','云吞面','鸡公煲'
+];
+function randomDecisionExample(){
+  return decisionExampleFoods[Math.floor(Math.random() * decisionExampleFoods.length)];
+}
+function refreshDecisionPlaceholders(){
+  const inputs = document.querySelectorAll('.decision-option');
+  inputs.forEach((input, idx) => {
+    if(!input.dataset.example) input.dataset.example = randomDecisionExample();
+    input.placeholder = `选项 ${idx + 1}，例如：${input.dataset.example}`;
+  });
+}
+function refreshDecisionRemoveButtons(){
+  const inputs = document.querySelectorAll('.decision-option');
+  refreshDecisionPlaceholders();
+  document.querySelectorAll('.remove-decision-option').forEach(btn => {
+    btn.classList.toggle('invisible', inputs.length <= 2);
+  });
+  addDecisionOption.classList.toggle('opacity-40', inputs.length >= 5);
+  addDecisionOption.classList.toggle('pointer-events-none', inputs.length >= 5);
+}
+function getDecisionValues(){
+  return Array.from(document.querySelectorAll('.decision-option')).map(input => input.value.trim()).filter(Boolean);
+}
+function updateDecisionHint(text){ decisionHint.textContent = text || '请输入 2–5 个选项。'; }
+
+addDecisionOption.addEventListener('click', () => {
+  const inputs = document.querySelectorAll('.decision-option');
+  if(inputs.length >= 5){ updateDecisionHint('最多只能输入 5 个选项。'); return; }
+  const example = randomDecisionExample();
+  const row = document.createElement('div');
+  row.className = 'flex gap-2 items-center';
+  row.innerHTML = `<input class="decision-option flex-grow px-3 py-2 bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary-container text-sm" data-example="${example}" placeholder="选项 ${inputs.length + 1}，例如：${example}" type="text" />
+    <button class="remove-decision-option text-outline hover:text-red-600 transition-colors" title="删除"><span class="material-symbols-outlined">remove_circle</span></button>`;
+  decisionOptions.appendChild(row);
+  refreshDecisionRemoveButtons();
+  row.querySelector('input').focus();
+});
+
+decisionOptions.addEventListener('click', e => {
+  const btn = e.target.closest('.remove-decision-option');
+  if(!btn) return;
+  const inputs = document.querySelectorAll('.decision-option');
+  if(inputs.length <= 2) return;
+  btn.closest('.flex').remove();
+  refreshDecisionRemoveButtons();
+  updateDecisionHint();
+});
+
+decisionOptions.addEventListener('input', () => updateDecisionHint());
+
+function renderDecisionCards(values){
+  const shuffled = shuffle(values);
+  decisionCardsGrid.innerHTML = '';
+  decisionResult.classList.add('hidden');
+  decisionResultText.textContent = '';
+  decisionModalSubtitle.textContent = '卡片已打乱，点击一张翻开。';
+  shuffled.forEach((text, idx) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'decision-card decision-perspective w-32 h-44 md:w-36 md:h-48 cursor-pointer active:scale-95 transition-transform';
+    card.setAttribute('aria-label', `抽取第 ${idx + 1} 张卡片`);
+    card.innerHTML = `<div class="decision-card-inner relative w-full h-full rounded-3xl shadow-lg">
+      <div class="decision-card-front absolute inset-0 rounded-3xl bg-primary-container border-4 border-white flex flex-col items-center justify-center text-white shadow-inner">
+        <span class="material-symbols-outlined text-4xl mb-2">restaurant</span>
+        <span class="text-sm font-bold">点击翻开</span>
+      </div>
+      <div class="decision-card-back absolute inset-0 rounded-3xl bg-white border-2 border-primary-container flex items-center justify-center p-4 text-center">
+        <span class="font-extrabold text-primary text-lg leading-6 break-words">${escapeHtml(text)}</span>
+      </div>
+    </div>`;
+    card.addEventListener('click', () => {
+      if(decisionCardsGrid.dataset.done === '1') return;
+      decisionCardsGrid.dataset.done = '1';
+      card.classList.add('flipped');
+      card.classList.add('scale-110');
+      decisionResultText.textContent = text;
+      decisionResult.classList.remove('hidden');
+      decisionModalSubtitle.textContent = '命中注定就是它。';
+      Array.from(decisionCardsGrid.children).forEach(other => {
+        if(other !== card) other.classList.add('opacity-45');
+      });
+    });
+    decisionCardsGrid.appendChild(card);
+  });
+  decisionCardsGrid.dataset.done = '0';
+  decisionCardsGrid.classList.add('decision-shuffling');
+  setTimeout(() => decisionCardsGrid.classList.remove('decision-shuffling'), 1500);
+}
+
+startDecisionDraw.addEventListener('click', () => {
+  const values = Array.from(new Set(getDecisionValues()));
+  if(values.length < 2){ updateDecisionHint('请至少输入 2 个不同选项。'); return; }
+  if(values.length > 5){ updateDecisionHint('最多只能输入 5 个选项。'); return; }
+  updateDecisionHint(`已放入 ${values.length} 个选项，正在抽取。`);
+  renderDecisionCards(values);
+  decisionModal.classList.remove('hidden');
+  decisionModal.classList.add('flex');
+});
+
+closeDecisionModal.addEventListener('click', () => {
+  decisionModal.classList.add('hidden');
+  decisionModal.classList.remove('flex');
+});
+decisionModal.addEventListener('click', e => {
+  if(e.target === decisionModal){
+    decisionModal.classList.add('hidden');
+    decisionModal.classList.remove('flex');
+  }
+});
+refreshDecisionRemoveButtons();
+</script>
+</body>
+</html>
